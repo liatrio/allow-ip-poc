@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - master
+      - main
   schedule:
     # Runs at 5am UTC every Sunday
     - cron: '0 5 * * 0'
