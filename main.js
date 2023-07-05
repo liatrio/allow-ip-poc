@@ -153,14 +153,14 @@ async function main() {
   }
 }
 
+module.exports = ({ github, context }) => {
+  return main()
+}
+
 // const getUser = async () => {
 //   const allow_list = await octokit.graphql(GetAllowListQuery)
 //   console.log(JSON.stringify(allow_list, null, 2))
 // }
-
-main()
-  .then(() => console.log('Execution completed successfully'))
-  .catch(e => console.error(e))
 
 // getGitHubIPs(octokit)
 //   .then(res => {})
