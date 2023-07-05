@@ -133,7 +133,7 @@ const getAllowList = async octokit => {
 
 async function main() {
   try {
-    const octokit = new NOctokit({ auth: process.env.GITHUB_TOKEN })
+    const octokit = new NOctokit({ auth: process.env.GH_TOKEN })
 
     const allow_list = await getAllowList(octokit)
 

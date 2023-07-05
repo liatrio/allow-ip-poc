@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/github-script@v6
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
           script: |
             const script = require('./main.js')
