@@ -1,0 +1,19 @@
+{
+  "name": "ip-allow-stuff",
+  "version": "1.0.0",
+  "description": "",
+  "main": "tmp.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@octokit/core": "^4.2.4",
+    "@octokit/plugin-paginate-graphql": "^3.0.0",
+    "dotenv": "^16.3.1",
+    "fs-extra": "^11.1.1",
+    "octokit": "^2.1.0"
+  }
+}

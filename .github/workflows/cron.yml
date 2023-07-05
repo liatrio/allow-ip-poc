@@ -1,0 +1,20 @@
+on:
+  push:
+    branches:
+      - master
+  schedule:
+    # Runs at 5am UTC every Sunday
+    - cron: '0 5 * * 0'
+
+jobs:
+  echo-input:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/github-script@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const script = require('./tmp.js')
+            console.log(script({github, context}))
