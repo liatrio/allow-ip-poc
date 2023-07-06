@@ -111,15 +111,12 @@ const getAllowList = async octokit => {
 
     if (allowList.organization.ipAllowListEntries.edges.length === 0) {
       console.debug('No entries found')
-      console.debug(JSON.stringify(allowList, null, 2))
 
       return {
         ownerId: '',
         entries: [],
       }
     } else {
-      console.debug(JSON.stringify(allowList, null, 2))
-
       return {
         ownerId: allowList.organization.ipAllowListEntries.edges[0].node.owner,
         entries: allowList.organization.ipAllowListEntries.edges,
