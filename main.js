@@ -132,18 +132,16 @@ async function main() {
   try {
     const octokit = new NOctokit({ auth: process.env.GH_TOKEN })
 
-    const allow_list = await getAllowList(octokit)
+    const allowList = await getAllowList(octokit)
 
     const ghIPs = await getGitHubIPs(octokit)
 
-    const listDiff = diffLists(allow_list, ghIPs)
+    const listDiff = diffLists(allowList, ghIPs)
 
     if (listDiff.length > 0) {
       console.log('Adding missing IPs to allow list...')
-      await addMissingIPs(octokit, listDiff, allow_list.ownerId.id)
+      await addMissingIPs(octokit, listDiff, allowList.ownerId.id)
     }
-
-    // return { listDiff }
   } catch (err) {
     console.error(`[main]: Error encountered...`, err)
     return err
