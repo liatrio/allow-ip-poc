@@ -1,5 +1,6 @@
 const { Octokit } = require('octokit')
 const { paginateGraphql } = require('@octokit/plugin-paginate-graphql')
+const fs = require('fs')
 
 const NOctokit = Octokit.plugin(paginateGraphql)
 
@@ -7,7 +8,7 @@ require('dotenv').config()
 
 const GetAllowListQuery = `
 query paginate($cursor: String) {
-  organization(login: "liatrio") {
+  organization(login: "") {
     ipAllowListEntries(first: 100, after: $cursor) {
       totalCount
 
@@ -75,7 +76,7 @@ async function getGitHubIPs(octokit) {
   }
 }
 
-const addMissingIPs = async (octokit, ips, ownerId) => {
+const addMissingIPs = async (octokit, name, ips, ownerId) => {
   try {
     for (const ip of ips) {
       console.debug(`Adding ${ip} to allow list...`)
@@ -83,7 +84,7 @@ const addMissingIPs = async (octokit, ips, ownerId) => {
       const mutation = await octokit.graphql(MutationCreateIpAllowEntry, {
         ownerId,
         ip,
-        name: 'GitHub Actions',
+        name: name,
       })
 
       console.debug(JSON.stringify(mutation, null, 2))
@@ -100,6 +101,23 @@ function diffLists(allowList, ghIPs) {
     const diff = ghIPs.filter(ip => !allowListIPs.includes(ip))
 
     return diff
+  } catch (err) {
+    return err
+  }
+}
+
+function diffMap(allowList, allIPs) {
+  try {
+    const allowListIPs = allowList.entries.map(entry => entry.node.allowListValue)
+    const diffIPs = new Map();
+
+    for (var entry of allIPs.entries()) {
+      var key = entry[0],
+          value = entry[1];
+      diffIPs.set(key, diffLists(allowList, value))
+    }
+
+    return diffIPs
   } catch (err) {
     return err
   }
@@ -128,19 +146,44 @@ const getAllowList = async octokit => {
   }
 }
 
+function getManagedIPs(){
+  try {
+    const fileContents = fs.readFileSync('./ip.json', 'utf8')
+    const ipData = JSON.parse(fileContents)
+    return ipData
+  } catch(err) {
+    console.error(`[getManagedIPs]: Error encountered...`, err)
+    return err
+  }
+}
+
 async function main() {
   try {
     const octokit = new NOctokit({ auth: process.env.GH_TOKEN })
+
+    const allIPs = new Map();
+
+    const managedIPs = getManagedIPs()
+
+    for(var attributename in managedIPs){
+      allIPs.set(managedIPs[attributename]["name"], managedIPs[attributename]["ipList"]);
+    }
 
     const allowList = await getAllowList(octokit)
 
     const ghIPs = await getGitHubIPs(octokit)
 
-    const listDiff = diffLists(allowList, ghIPs)
+    allIPs.set('GitHub Actions', ghIPs)
 
-    if (listDiff.length > 0) {
-      console.log('Adding missing IPs to allow list...')
-      await addMissingIPs(octokit, listDiff, allowList.ownerId.id)
+    const mapDiff = diffMap(allowList, allIPs)
+
+    for (var entry of mapDiff.entries()) {
+      const nameIP = entry[0]
+      const listDiff = entry[1]
+      if (listDiff.length > 0) {
+        console.log('Adding missing IPs to allow list...')
+        await addMissingIPs(octokit, nameIP, listDiff, allowList.ownerId.id)
+      }
     }
   } catch (err) {
     console.error(`[main]: Error encountered...`, err)
