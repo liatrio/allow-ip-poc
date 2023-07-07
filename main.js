@@ -145,11 +145,13 @@ const getAllowList = async octokit => {
   }
 }
 
-function getManagedIPs(){
+function getManagedIPs(filename){
   try {
-    const fileContents = fs.readFileSync('./ip.json', 'utf8')
-    const ipData = JSON.parse(fileContents)
-    return ipData
+    if (fs.existsSync(filename)){
+      const fileContents = fs.readFileSync(filename, 'utf8')
+      const ipData = JSON.parse(fileContents)
+      return ipData
+    }
   } catch(err) {
     console.error(`[getManagedIPs]: Error encountered...`, err)
     return err
@@ -162,10 +164,12 @@ async function main() {
 
     const allIPs = new Map();
 
-    const managedIPs = getManagedIPs()
+    const managedIPs = getManagedIPs('./ip.json')
 
-    for(var attributename in managedIPs){
-      allIPs.set(managedIPs[attributename]["name"], managedIPs[attributename]["ipList"]);
+    if (managedIPs != null){
+      for(var attributename in managedIPs){
+        allIPs.set(managedIPs[attributename]["name"], managedIPs[attributename]["ipList"]);
+      }
     }
 
     const allowList = await getAllowList(octokit)
