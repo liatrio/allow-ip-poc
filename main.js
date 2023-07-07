@@ -95,10 +95,9 @@ const addMissingIPs = async (octokit, name, ips, ownerId) => {
   }
 }
 
-function diffLists(allowList, ghIPs) {
+function diffLists(allowListIPs, listIPs) {
   try {
-    const allowListIPs = allowList.entries.map(entry => entry.node.allowListValue)
-    const diff = ghIPs.filter(ip => !allowListIPs.includes(ip))
+    const diff = listIPs.filter(ip => !allowListIPs.includes(ip))
 
     return diff
   } catch (err) {
@@ -112,9 +111,9 @@ function diffMap(allowList, allIPs) {
     const diffIPs = new Map();
 
     for (var entry of allIPs.entries()) {
-      var key = entry[0],
-          value = entry[1];
-      diffIPs.set(key, diffLists(allowList, value))
+      var nameIP = entry[0],
+          listIPs = entry[1];
+      diffIPs.set(nameIP, diffLists(allowListIPs, listIPs))
     }
 
     return diffIPs
