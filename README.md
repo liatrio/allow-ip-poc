@@ -45,3 +45,28 @@ Note how the 2nd line has `login: "liatrio"` as that's the name of the org we're
 
 This POC requires a Personal Access Token with scope `admin:org` that is set as a repository secret in GitHub named `GH_TOKEN`. This is referenced in `main.js` when accessing the GitHub API.
 
+### Managing Other IPs using json file
+
+This POC now has a way to read a json file called `ip.json` to add to the IP allow list.
+
+Here is an example of how the file looks like:
+```json
+[
+    {
+        "name": "Google",
+        "ipList": [
+            "8.8.8.8"
+        ]
+    },
+    {
+      "name": "Secondary object to categorize IPs",
+      "ipList": [
+        "IP address 1",
+        "IP address 2"
+      ]
+    }
+]
+```
+
+The script will parse the `ip.json` to check the IPs if they are inside the IP allow list for the organization and add them if they do not exist in there already.
+
