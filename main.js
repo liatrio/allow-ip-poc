@@ -8,7 +8,7 @@ require('dotenv').config()
 
 const GetAllowListQuery = `
 query paginate($cursor: String) {
-  organization(login: "") {
+  organization(login: "github-certs") {
     ipAllowListEntries(first: 100, after: $cursor) {
       totalCount
 
