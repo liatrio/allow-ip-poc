@@ -45,6 +45,10 @@ Note how the 2nd line has `login: "liatrio"` as that's the name of the org we're
 
 This POC requires a Personal Access Token with scope `admin:org` that is set as a repository secret in GitHub named `GH_TOKEN`. This is referenced in `main.js` when accessing the GitHub API.
 
+### GitHub Org
+
+This POC requires a organization login name such as `liatrio` to be stored as a secret. This is referenced in `main.js` when querying the IP allow list of the organization specified.
+
 ### Managing Other IPs using json file
 
 This POC now has a way to read a json file called `ip.json` to add to the IP allow list.

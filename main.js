@@ -7,8 +7,8 @@ const NOctokit = Octokit.plugin(paginateGraphql)
 require('dotenv').config()
 
 const GetAllowListQuery = `
-query paginate($cursor: String) {
-  organization(login: "liatrio") {
+query paginate($cursor: String, $login: String!) {
+  organization(login: $login) {
     ipAllowListEntries(first: 100, after: $cursor) {
       totalCount
 
@@ -124,7 +124,7 @@ function diffMap(allowList, allIPs) {
 
 const getAllowList = async octokit => {
   try {
-    const allowList = await octokit.graphql.paginate(GetAllowListQuery)
+    const allowList = await octokit.graphql.paginate(GetAllowListQuery, {login: process.env.ORG_LOGIN })
 
     if (allowList.organization.ipAllowListEntries.edges.length === 0) {
       console.debug('No entries found')
