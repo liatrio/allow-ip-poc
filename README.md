@@ -8,69 +8,43 @@ There are a couple of key components to note in this POC:
 
 ### Organization Name
 
-In the main.js file, there is the following GraphQL query:
+This POC requires the name of the organization you want these allow rules added to. This will be passed into a GraphQL query as a string variable but it can be set in a couple of different ways.
 
-```graphql
-query paginate($cursor: String) {
-  organization(login: "liatrio") {
-    ipAllowListEntries(first: 100, after: $cursor) {
-      totalCount
+In our POC, this is handled by an environment variable called `ORG_LOGIN`. You can store this as a repository secret or just hardcode it in the workflow file:
 
-      edges {
-        node {
-          id
-          name
-          owner {
-            ... on Organization {
-              id
-              login
-            }
-          }
-          isActive
-          allowListValue
-        }
-      }
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-    }
-  }
-}
+```yaml
+- uses: actions/github-script@v6
+  env:
+    GH_TOKEN: ${{ secrets.GH_TOKEN }}
+    ORG_LOGIN: ${{ secrets.ORG_LOGIN }}
+    # ORG_LOGIN: "ORG_NAME_HERE"
+  with:
+    script: |
+      const script = require('./main.js')
+      console.log(script({github, context}))
 ```
-
-Note how the 2nd line has `login: "liatrio"` as that's the name of the org we're working with. If you want to use this POC for your own org, you'll need to change that value to your org's name.
 
 ### GitHub Token
 
 This POC requires a Personal Access Token with scope `admin:org` that is set as a repository secret in GitHub named `GH_TOKEN`. This is referenced in `main.js` when accessing the GitHub API.
-
-### GitHub Org
-
-This POC requires a organization login name such as `liatrio` to be stored as a secret. This is referenced in `main.js` when querying the IP allow list of the organization specified.
 
 ### Managing Other IPs using json file
 
 This POC now has a way to read a json file called `ip.json` to add to the IP allow list.
 
 Here is an example of how the file looks like:
+
 ```json
 [
-    {
-        "name": "Google",
-        "ipList": [
-            "8.8.8.8"
-        ]
-    },
-    {
-      "name": "Secondary object to categorize IPs",
-      "ipList": [
-        "IP address 1",
-        "IP address 2"
-      ]
-    }
+  {
+    "name": "Google",
+    "ipList": ["8.8.8.8"]
+  },
+  {
+    "name": "Secondary object to categorize IPs",
+    "ipList": ["IP address 1", "IP address 2"]
+  }
 ]
 ```
 
 The script will parse the `ip.json` to check the IPs if they are inside the IP allow list for the organization and add them if they do not exist in there already.
-
