@@ -381,6 +381,13 @@ async function main() {
   }
 }
 
-module.exports = () => {
-  return main()
+module.exports = async () => {
+  try {
+    await main()
+
+    console.log(`[module.exports]: Successfully completed.`)
+  } catch (err) {
+    console.error(`[module.exports]: Error encountered...`, err)
+    return err
+  }
 }
