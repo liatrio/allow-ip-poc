@@ -2,8 +2,9 @@ const { Octokit } = require('octokit')
 const { paginateGraphql } = require('@octokit/plugin-paginate-graphql')
 const { join } = require('path')
 const fs = require('fs-extra')
-
 const NOctokit = Octokit.plugin(paginateGraphql)
+
+const converter = require('json-2-csv')
 
 require('dotenv').config()
 
@@ -292,20 +293,57 @@ async function removeExtraIPs(octokit, toRemove) {
   }
 }
 
+function convertMapsToArrays(toAdd, toRemove, allowList) {
+  const toAddArray = []
+  const toRemoveArray = []
+  const allowListArray = []
+
+  // Populate toAddArray for CSV output.
+  for (const [name, entries] of toAdd) {
+    toAddArray.push({ name, entries })
+  }
+
+  // Populate toRemoveArray for CSV output.
+  for (const [name, entries] of toRemove) {
+    for (const entry of entries) {
+      toRemoveArray.push({ name, ip: entry.ip, id: entry.id })
+    }
+  }
+
+  // Populate allowListArray for CSV output.
+  for (const [name, entries] of allowList) {
+    for (const entry of entries) {
+      allowListArray.push({ name, ip: entry.ip, id: entry.id })
+    }
+  }
+
+  return { toAddArray, toRemoveArray, allowListArray }
+}
+
 async function outputResults(toAdd, toRemove, allowList) {
   try {
     const timestamp = new Date().toISOString().replace(/:/g, '-')
 
-    const toAddFilePath = join(__dirname, 'output', `To-Add-${timestamp}.json`)
-    const toRemoveFilePath = join(__dirname, 'output', `To-Remove-${timestamp}.json`)
-    const allowListFilePath = join(__dirname, 'output', `Current-Allow-List-${timestamp}.json`)
+    const toAddCSVFilePath = join(__dirname, 'output', `To-Add-${timestamp}.csv`)
+    const toRemoveCSVFilePath = join(__dirname, 'output', `To-Remove-${timestamp}.csv`)
+    const allowListCSVFilePath = join(__dirname, 'output', `Current-Allow-List-${timestamp}.csv`)
+
+    const { allowListArray, toAddArray, toRemoveArray } = convertMapsToArrays(
+      toAdd,
+      toRemove,
+      allowList
+    )
+
+    const toAddCSV = await converter.json2csv(toAddArray)
+    const toRemoveCSV = await converter.json2csv(toRemoveArray)
+    const allowListCSV = await converter.json2csv(allowListArray)
 
     await fs.ensureDir(join(__dirname, 'output'))
 
     return Promise.all([
-      fs.writeJSON(toAddFilePath, Object.fromEntries(toAdd), { spaces: 2 }),
-      fs.writeJSON(toRemoveFilePath, Object.fromEntries(toRemove), { spaces: 2 }),
-      fs.writeJSON(allowListFilePath, Object.fromEntries(allowList), { spaces: 2 }),
+      fs.writeFile(toAddCSVFilePath, toAddCSV),
+      fs.writeFile(toRemoveCSVFilePath, toRemoveCSV),
+      fs.writeFile(allowListCSVFilePath, allowListCSV),
     ])
   } catch (err) {
     console.error(`[outputArchive]: Error encountered...`, err)
@@ -343,6 +381,13 @@ async function main() {
   }
 }
 
-module.exports = () => {
-  return main()
+module.exports = async () => {
+  try {
+    await main()
+
+    console.log(`[module.exports]: Successfully completed.`)
+  } catch (err) {
+    console.error(`[module.exports]: Error encountered...`, err)
+    return err
+  }
 }
