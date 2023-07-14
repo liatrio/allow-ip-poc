@@ -2,7 +2,6 @@ on:
   push:
     branches:
       - main
-      - develop
   schedule:
     # Runs at 5am UTC every Sunday
     - cron: '0 5 * * 0'
