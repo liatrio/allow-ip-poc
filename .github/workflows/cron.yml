@@ -32,3 +32,8 @@ jobs:
         with:
           name: Results-Output
           path: output/*
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: output/*
