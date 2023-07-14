@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 18
       - run: npm ci
 
       - uses: actions/github-script@v6
@@ -32,8 +32,3 @@ jobs:
         with:
           name: Results-Output
           path: output/*
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: output/*
