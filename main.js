@@ -1,6 +1,7 @@
 const { Octokit } = require('octokit')
 const { paginateGraphql } = require('@octokit/plugin-paginate-graphql')
-const fs = require('fs')
+const { join } = require('path')
+const fs = require('fs-extra')
 
 const NOctokit = Octokit.plugin(paginateGraphql)
 
@@ -35,7 +36,7 @@ query paginate($cursor: String, $login: String!) {
 }
 `
 
-const MutationCreateIpAllowEntry = `
+const CreateIpAllowEntryMutation = `
   mutation ($ownerId: ID!, $ip: String!, $name: String) {
     createIpAllowListEntry(
       input: { ownerId: $ownerId, allowListValue: $ip, name: $name, isActive: true }
@@ -52,108 +53,262 @@ const MutationCreateIpAllowEntry = `
   }
 `
 
+const DeleteIpAllowEntryMutation = `
+  mutation ($id: ID!) {
+    deleteIpAllowListEntry(input: { ipAllowListEntryId: $id }) {
+      clientMutationId
+    }
+  }
+`
+
 /**
- * Attempts to get an array of IP addresses from the GitHub API `/meta`
- * endpoint using the provided Octokit instance. If none are found,
- * then an empty array is returned.
+ * Retrieves the IP addresses stored in the file with the given `filename`. If the file exists, this
+ * function will read it and convert it to a `Map<string, string[]>` of IP addresses to their
+ * corresponding names. If the file does not exist, then an empty Map is returned. If there is an
+ * error, then the error is returned.
  *
- * @param {*} octokit The Octokit instance.
+ * @param {string} filename The name of the file containing the saved IP addresses.
  *
- * @returns An array of IP addresses or an empty array.
+ * @returns A `Map<string, string[]>` of IP addresses to their corresponding names or an error.
+ */
+async function getSavedIPs(filename) {
+  try {
+    const savedIPs = new Map()
+
+    const pathExists = await fs.pathExists(filename)
+
+    if (pathExists) {
+      const data = await fs.readJSON(filename)
+
+      for (const entry of data) savedIPs.set(entry.name, entry.ipList)
+    }
+
+    return savedIPs
+  } catch (err) {
+    console.error(`[getSavedIPs]: Error encountered...`, err)
+    return err
+  }
+}
+
+/**
+ * Gets the latest IP addresses used by GitHub Actions and return them as an array of strings. If
+ * there is an error, then the error is returned.
+ *
+ * @param {Octokit} octokit The Octokit instance to use for the request.
+ *
+ * @returns IP addresses used by GitHub Actions as an array of strings or an error.
  */
 async function getGitHubIPs(octokit) {
   try {
     const response = await octokit.request('GET /meta')
-    if (response.data.actions) return response.data.actions
-    return []
 
-    // Ternary operator version.
-    // return response.data.actions ? response.data.actions : []
+    return response.data.actions || []
   } catch (err) {
     console.error(`[getGitHubIPs]: Error encountered...`, err)
-
     return err
   }
 }
 
-const addMissingIPs = async (octokit, name, ips, ownerId) => {
+/**
+ * Gets the current allow list from GitHub and returns it as a "special" `Map`. It maps the name of
+ * the allow list entry to an array of objects that contain the entry's id, name, and IP address.
+ * These values are used when removing/adding entries to the allow list. It will be returned as the
+ * `allowList` property of the returned object along with the `ownerId` property which is the ID of
+ * the organization that owns the allow list. If there are no entries in the allow list, then an
+ * empty `Map` is returned and if there is an error, then the error is returned.
+ *
+ * @param {Octokit} octokit The Octokit instance to use for the request.
+ *
+ * @returns An Object containing the ownerId and a "special" `Map` of the current allow list or an
+ * error.
+ */
+async function getCurrentAllowList(octokit) {
   try {
-    for (const ip of ips) {
-      console.debug(`Adding ${ip} to allow list...`)
+    const allowList = new Map()
+    let ownerId = undefined
 
-      const mutation = await octokit.graphql(MutationCreateIpAllowEntry, {
-        ownerId,
-        ip,
-        name: name,
-      })
+    const res = await octokit.graphql.paginate(GetAllowListQuery, {
+      login: process.env.ORG_LOGIN,
+    })
 
-      console.debug(JSON.stringify(mutation, null, 2))
-    }
-  } catch (err) {
-    console.error(`[main]: Error encountered...`, err)
-    return err
-  }
-}
+    if (res.organization.ipAllowListEntries.edges.length !== 0) {
+      ownerId = res.organization.ipAllowListEntries.edges[0].node.owner.id
 
-function diffLists(allowListIPs, listIPs) {
-  try {
-    const diff = listIPs.filter(ip => !allowListIPs.includes(ip))
+      for (const entry of res.organization.ipAllowListEntries.edges) {
+        const allowListEntry = {
+          id: entry.node.id,
+          name: entry.node.name,
+          ip: entry.node.allowListValue,
+        }
 
-    return diff
-  } catch (err) {
-    return err
-  }
-}
-
-function diffMap(allowList, allIPs) {
-  try {
-    const allowListIPs = allowList.entries.map(entry => entry.node.allowListValue)
-    const diffIPs = new Map();
-
-    for (var entry of allIPs.entries()) {
-      var nameIP = entry[0],
-          listIPs = entry[1];
-      diffIPs.set(nameIP, diffLists(allowListIPs, listIPs))
-    }
-
-    return diffIPs
-  } catch (err) {
-    return err
-  }
-}
-
-const getAllowList = async octokit => {
-  try {
-    const allowList = await octokit.graphql.paginate(GetAllowListQuery, {login: process.env.ORG_LOGIN })
-
-    if (allowList.organization.ipAllowListEntries.edges.length === 0) {
-      console.debug('No entries found')
-
-      return {
-        ownerId: '',
-        entries: [],
-      }
-    } else {
-      return {
-        ownerId: allowList.organization.ipAllowListEntries.edges[0].node.owner,
-        entries: allowList.organization.ipAllowListEntries.edges,
+        if (allowList.has(allowListEntry.name)) {
+          allowList.get(allowListEntry.name).push(allowListEntry)
+        } else allowList.set(allowListEntry.name, [allowListEntry])
       }
     }
+
+    return { ownerId, allowList }
   } catch (err) {
     console.error(`[getAllowList]: Error encountered...`, err)
     return err
   }
 }
 
-function getManagedIPs(filename){
+/**
+ * Gets the IP addresses that need to be removed from the current `allowList` by comparing it to
+ * `newIPs` and finding any IP listed in the allowList but not the `newIPs`. If there are no IPs to
+ * remove, then an empty `Map` is returned and if there is an error, then the error is returned.
+ *
+ * @param {Map} allowList A `Map` of the current allow list.
+ * @param {Map} newIPs A `Map` of the new IP addresses.
+ *
+ * @returns A `Map` of the IP addresses to remove from the allow list.
+ */
+async function getIPsToRemove(allowList, newIPs) {
   try {
-    if (fs.existsSync(filename)){
-      const fileContents = fs.readFileSync(filename, 'utf8')
-      const ipData = JSON.parse(fileContents)
-      return ipData
+    const toRemove = new Map()
+
+    for (const [name, entries] of allowList) {
+      const newIPList = newIPs.get(name)
+
+      if (newIPList) {
+        const ipsToRemove = entries.filter(entry => !newIPList.includes(entry.ip))
+
+        if (ipsToRemove.length !== 0) {
+          toRemove.set(name, ipsToRemove)
+        }
+      } else {
+        toRemove.set(name, entries)
+      }
     }
-  } catch(err) {
-    console.error(`[getManagedIPs]: Error encountered...`, err)
+
+    return toRemove
+  } catch (err) {
+    console.error(`[getIPsToRemove]: Error encountered...`, err)
+    return err
+  }
+}
+
+/**
+ * Gets the IP addresses that need to be added to the current `allowList` by comparing it to
+ * `newIPs` and finding any IP listed in `newIPs` but not the allowList. If there are no IPs to add,
+ * then an empty `Map` is returned and if there is an error, then the error is returned.
+ *
+ * @param {Map} allowList A `Map` of the current allow list.
+ * @param {Map} newIPs A `Map` of the new IP addresses.
+ *
+ * @returns A `Map` of the IP addresses to add to the allow list.
+ */
+async function getIPsToAdd(allowList, newIPs) {
+  try {
+    const toAdd = new Map()
+
+    for (const [name, entries] of newIPs) {
+      const oldIPList = allowList.get(name)
+
+      if (oldIPList) {
+        const ipsToAdd = []
+
+        for (const { ip } of oldIPList) {
+          if (!entries.includes(ip)) {
+            ipsToAdd.push(ip)
+          }
+        }
+
+        if (ipsToAdd.length !== 0) {
+          toAdd.set(name, ipsToAdd)
+        }
+      } else {
+        toAdd.set(name, entries)
+      }
+    }
+
+    return toAdd
+  } catch (err) {
+    console.error(`[getIPsToAdd]: Error encountered...`, err)
+    return err
+  }
+}
+
+/**
+ * Adds the IP addresses in `toAdd` to the allow list. If there are no IPs to add, then an empty
+ * array is returned and if there is an error, then the error is returned.
+ *
+ * @param {Octokit} octokit The Octokit instance to use for the request.
+ * @param {string} ownerId The ID of the owner of the allow list.
+ * @param {Map} toAdd A `Map` of the IP addresses to add to the allow list.
+ *
+ * @returns An array of responses from the GraphQL API, if any, or an error.
+ */
+async function addMissingIPs(octokit, ownerId, toAdd) {
+  try {
+    const responses = []
+
+    for (const [name, ipList] of toAdd) {
+      for (const ip of ipList) {
+        const res = await octokit.graphql(CreateIpAllowEntryMutation, {
+          ownerId,
+          ip,
+          name,
+        })
+
+        responses.push(res)
+      }
+    }
+
+    return responses
+  } catch (err) {
+    return err
+  }
+}
+
+/**
+ * Removes the IP addresses in `toRemove` from the allow list. If there are no IPs to remove, then
+ * an empty array is returned and if there is an error, then the error is returned.
+ *
+ * @param {Octokit} octokit The Octokit instance to use for the request.
+ * @param {Map} toRemove A `Map` of the IP addresses to remove from the allow list.
+ *
+ * @returns An array of responses from the GraphQL API, if any, or an error.
+ */
+async function removeExtraIPs(octokit, toRemove) {
+  try {
+    const responses = []
+
+    for (const [name, entries] of toRemove) {
+      for (const entry of entries) {
+        const res = await octokit.graphql(DeleteIpAllowEntryMutation, {
+          id: entry.id,
+        })
+
+        responses.push(res)
+      }
+    }
+
+    return responses
+  } catch (err) {
+    console.error(`[removeExtraIPs]: Error encountered...`, err)
+    return err
+  }
+}
+
+async function outputResults(toAdd, toRemove, allowList) {
+  try {
+    const timestamp = new Date().toISOString().replace(/:/g, '-')
+
+    const toAddFilePath = join(__dirname, 'output', `To-Add-${timestamp}.json`)
+    const toRemoveFilePath = join(__dirname, 'output', `To-Remove-${timestamp}.json`)
+    const allowListFilePath = join(__dirname, 'output', `Current-Allow-List-${timestamp}.json`)
+
+    await fs.ensureDir(join(__dirname, 'output'))
+
+    return Promise.all([
+      fs.writeJSON(toAddFilePath, Object.fromEntries(toAdd), { spaces: 2 }),
+      fs.writeJSON(toRemoveFilePath, Object.fromEntries(toRemove), { spaces: 2 }),
+      fs.writeJSON(allowListFilePath, Object.fromEntries(allowList), { spaces: 2 }),
+    ])
+  } catch (err) {
+    console.error(`[outputArchive]: Error encountered...`, err)
     return err
   }
 }
@@ -162,52 +317,32 @@ async function main() {
   try {
     const octokit = new NOctokit({ auth: process.env.GH_TOKEN })
 
-    const allIPs = new Map();
+    const newIPs = new Map()
 
-    const managedIPs = getManagedIPs('./ip.json')
+    const gitHubIPs = await getGitHubIPs(octokit)
 
-    if (managedIPs != null){
-      for(var attributename in managedIPs){
-        allIPs.set(managedIPs[attributename]["name"], managedIPs[attributename]["ipList"]);
-      }
-    }
+    newIPs.set('GitHub Actions', gitHubIPs)
 
-    const allowList = await getAllowList(octokit)
+    const savedIPs = await getSavedIPs('ip.json')
 
-    const ghIPs = await getGitHubIPs(octokit)
+    for (const [name, ipList] of savedIPs) newIPs.set(name, ipList)
 
-    allIPs.set('GitHub Actions', ghIPs)
+    const { allowList, ownerId } = await getCurrentAllowList(octokit)
 
-    const mapDiff = diffMap(allowList, allIPs)
+    const toRemove = await getIPsToRemove(allowList, newIPs)
+    const toAdd = await getIPsToAdd(allowList, newIPs)
 
-    for (var entry of mapDiff.entries()) {
-      const nameIP = entry[0]
-      const listDiff = entry[1]
-      if (listDiff.length > 0) {
-        console.log('Adding missing IPs to allow list...')
-        await addMissingIPs(octokit, nameIP, listDiff, allowList.ownerId.id)
-      }
-    }
+    await addMissingIPs(octokit, ownerId, toAdd)
+
+    await removeExtraIPs(octokit, toRemove)
+
+    await outputResults(toAdd, toRemove, allowList)
   } catch (err) {
     console.error(`[main]: Error encountered...`, err)
     return err
   }
 }
 
-module.exports = ({ github, context }) => {
+module.exports = () => {
   return main()
 }
-
-// const getUser = async () => {
-//   const allow_list = await octokit.graphql(GetAllowListQuery)
-//   console.log(JSON.stringify(allow_list, null, 2))
-// }
-
-// getGitHubIPs(octokit)
-//   .then(res => {})
-//   .then(res => writeJson('./tmp.json', res, { spaces: 2 }))
-//   .then(res => {
-//     console.log(JSON.stringify(res, null, 2))
-//     console.log('Execution completed successfully')
-//   })
-//   .catch(e => console.error(e))
