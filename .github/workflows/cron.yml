@@ -27,7 +27,12 @@ jobs:
             const script = require('./main.js')
             console.log(script({github, context}))
 
+      - name: Set current date as env variable
+        run: echo "TIMESTAMP=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
+
       - uses: actions/upload-artifact@v3
+        env:
+          TIMESTAMP: ${{ env.TIMESTAMP }}
         with:
-          name: Results-Output
+          name: Results-Output-${{ env.TIMESTAMP }}
           path: output/*
