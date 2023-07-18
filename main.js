@@ -168,14 +168,15 @@ async function getCurrentAllowList(octokit) {
 async function getIPsToRemove(allowList, newIPs) {
   try {
     const toRemove = new Map()
-
+    await log(`[getIPsToRemove]: Getting IPs to remove...`)
     for (const [name, entries] of allowList) {
+      await log(`[getIPsToRemove]: Checking ${name}...`)
       const newIPList = newIPs.get(name)
 
       if (newIPList) {
         const ipsToRemove = entries.filter(entry => !newIPList.includes(entry.ip))
-
         if (ipsToRemove.length !== 0) {
+          await log(`[getIPsToRemove]: Removing [${ipsToRemove.length}] from [${name}]`)
           toRemove.set(name, ipsToRemove)
         }
       } else {
@@ -204,19 +205,27 @@ async function getIPsToAdd(allowList, newIPs) {
   try {
     const toAdd = new Map()
 
+    await log(`[getIPsToAdd]: Getting IPs to add...`)
     for (const [name, entries] of newIPs) {
+      await log(`[getIPsToAdd]: Checking ${name}...`)
+
       const oldIPList = allowList.get(name)
 
       if (oldIPList) {
         const ipsToAdd = []
-
-        for (const { ip } of oldIPList) {
-          if (!entries.includes(ip)) {
+        const IPlist = []
+        for (const objects of oldIPList) {
+          IPlist.push(objects.ip)
+        }
+        for (const ip of entries) {
+          if (!IPlist.includes(ip)) {
+            await log(`[getIPsToAdd]: Adding ${ip}...`)
             ipsToAdd.push(ip)
           }
         }
 
         if (ipsToAdd.length !== 0) {
+          await log(`[getIPsToAdd]: Adding [${ipsToAdd.length}] to [${name}]`)
           toAdd.set(name, ipsToAdd)
         }
       } else {
@@ -229,6 +238,18 @@ async function getIPsToAdd(allowList, newIPs) {
     console.error(`[getIPsToAdd]: Error encountered...`, err)
     return err
   }
+}
+
+async function log(msg) {
+  const timestamp = new Date().toISOString()
+
+  console.log(`[${timestamp}]: ${msg}`)
+
+  // Store log message in a file with today's date as the name
+  await fs.appendFile(
+    join(__dirname, `logs-${timestamp.split('T')[0]}.log`),
+    `[${timestamp}]: ${msg}\n`
+  )
 }
 
 /**
@@ -244,9 +265,10 @@ async function getIPsToAdd(allowList, newIPs) {
 async function addMissingIPs(octokit, ownerId, toAdd) {
   try {
     const responses = []
-
+    await log(`Adding missing IPs...`)
     for (const [name, ipList] of toAdd) {
       for (const ip of ipList) {
+        await log(`${ip} to ${name}`)
         const res = await octokit.graphql(CreateIpAllowEntryMutation, {
           ownerId,
           ip,
@@ -275,9 +297,10 @@ async function addMissingIPs(octokit, ownerId, toAdd) {
 async function removeExtraIPs(octokit, toRemove) {
   try {
     const responses = []
-
+    await log(`Removing extra IPs...`)
     for (const [name, entries] of toRemove) {
       for (const entry of entries) {
+        await log(`${entry.ip} from ${name}`)
         const res = await octokit.graphql(DeleteIpAllowEntryMutation, {
           id: entry.id,
         })
@@ -385,7 +408,7 @@ module.exports = async () => {
   try {
     await main()
 
-    console.log(`[module.exports]: Successfully completed.`)
+    log(`[module.exports]: Successfully completed.`)
   } catch (err) {
     console.error(`[module.exports]: Error encountered...`, err)
     return err
