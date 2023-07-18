@@ -1,3 +1,5 @@
 .env
 cb-graphql-test.2023-07-05.private-key.pem
 node_modules
+*.log
+output/*
