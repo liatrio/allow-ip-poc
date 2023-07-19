@@ -243,8 +243,8 @@ async function getIPsToAdd(allowList, newIPs) {
       } else {
         await log(`[getIPsToAdd]: Validating entries...`)
         const invalidEntries = entries.filter(entry => !validateIPorCIDR(entry))
-        await log(`[getIPsToAdd]: Invalid entries: ${invalidEntries}`)
         const validEntries = entries.filter(validateIPorCIDR)
+        await log(`[getIPsToAdd]: Invalid entries: ${invalidEntries}`)
         await log(`[getIPsToAdd]: Validated entries: ${validEntries}`)
         toAdd.set(name, validEntries)
       }
@@ -298,6 +298,8 @@ async function addMissingIPs(octokit, ownerId, toAdd) {
 
     return responses
   } catch (err) {
+    console.error('[addMissingIPs]: Error encountered...', err)
+    
     return err
   }
 }
