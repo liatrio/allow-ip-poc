@@ -26,6 +26,7 @@ jobs:
         with:
           script: |
             const { default: manageIPs } = await import('${{ github.workspace }}/main.js')
+            await manageIPs()
             
 
       - name: Set current date as env variable
