@@ -299,7 +299,7 @@ async function addMissingIPs(octokit, ownerId, toAdd) {
     return responses
   } catch (err) {
     console.error('[addMissingIPs]: Error encountered...', err)
-    
+
     return err
   }
 }
@@ -395,7 +395,7 @@ async function outputResults(toAdd, toRemove, allowList) {
 
 function validateIPorCIDR(ip) {
   if (ip.includes('/')) {
-    return isCidr(ip)
+    return (isCidr.v4(ip) || isCidr.v6(ip))
   } else {
     return isIP(ip)
   }
