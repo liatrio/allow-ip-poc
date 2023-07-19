@@ -1,12 +1,19 @@
-const { Octokit } = require('octokit')
-const { paginateGraphql } = require('@octokit/plugin-paginate-graphql')
-const { join } = require('path')
-const fs = require('fs-extra')
+import { Octokit } from 'octokit'
+import { paginateGraphql } from '@octokit/plugin-paginate-graphql'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url';
+import fs from 'fs-extra'
 const NOctokit = Octokit.plugin(paginateGraphql)
 
-const converter = require('json-2-csv')
+import converter from 'json-2-csv'
+import { createRequire } from 'module'
+import isCidr from 'is-cidr'
+import { isIP } from 'is-ip';
 
-require('dotenv').config()
+import 'dotenv/config'
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const GetAllowListQuery = `
 query paginate($cursor: String, $login: String!) {
@@ -219,8 +226,14 @@ async function getIPsToAdd(allowList, newIPs) {
         }
         for (const ip of entries) {
           if (!IPlist.includes(ip)) {
-            await log(`[getIPsToAdd]: Adding ${ip}...`)
-            ipsToAdd.push(ip)
+            const valid = validateIPorCIDR(ip)
+            if (valid) {
+              console.log(valid)
+              await log(`[getIPsToAdd]: ${ip} is valid. Adding...`)
+              ipsToAdd.push(ip)
+            } else {
+              await log(`[getIPsToAdd]: ${ip} is not valid. Skipping...`)
+            }
           }
         }
 
@@ -229,7 +242,10 @@ async function getIPsToAdd(allowList, newIPs) {
           toAdd.set(name, ipsToAdd)
         }
       } else {
-        toAdd.set(name, entries)
+        await log(`[getIPsToAdd]: Validating entries...`)
+        const validEntries = entries.filter(filterEntries)
+        await log(`[getIPsToAdd]: Validated entries: ${validEntries}`)
+        toAdd.set(name, validEntries)
       }
     }
 
@@ -238,6 +254,10 @@ async function getIPsToAdd(allowList, newIPs) {
     console.error(`[getIPsToAdd]: Error encountered...`, err)
     return err
   }
+}
+
+function filterEntries(entry) {
+  return validateIPorCIDR(entry)
 }
 
 async function log(msg) {
@@ -371,6 +391,14 @@ async function outputResults(toAdd, toRemove, allowList) {
   } catch (err) {
     console.error(`[outputArchive]: Error encountered...`, err)
     return err
+  }
+}
+
+function validateIPorCIDR(ip) {
+  if (ip.includes('/')) {
+    return isCidr(ip)
+  } else {
+    return isIP(ip)
   }
 }
 
