@@ -1,12 +1,19 @@
-const { Octokit } = require('octokit')
-const { paginateGraphql } = require('@octokit/plugin-paginate-graphql')
-const { join } = require('path')
-const fs = require('fs-extra')
+import { Octokit } from 'octokit'
+import { paginateGraphql } from '@octokit/plugin-paginate-graphql'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url';
+import fs from 'fs-extra'
 const NOctokit = Octokit.plugin(paginateGraphql)
 
-const converter = require('json-2-csv')
+import converter from 'json-2-csv'
+import { createRequire } from 'module'
+import isCidr from 'is-cidr'
+import { isIP } from 'is-ip';
 
-require('dotenv').config()
+import 'dotenv/config'
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const GetAllowListQuery = `
 query paginate($cursor: String, $login: String!) {
@@ -219,8 +226,13 @@ async function getIPsToAdd(allowList, newIPs) {
         }
         for (const ip of entries) {
           if (!IPlist.includes(ip)) {
-            await log(`[getIPsToAdd]: Adding ${ip}...`)
-            ipsToAdd.push(ip)
+            const valid = validateIPorCIDR(ip)
+            if (valid) {
+              await log(`[getIPsToAdd]: ${ip} is valid. Adding...`)
+              ipsToAdd.push(ip)
+            } else {
+              await log(`[getIPsToAdd]: ${ip} is not valid. Skipping...`)
+            }
           }
         }
 
@@ -229,7 +241,12 @@ async function getIPsToAdd(allowList, newIPs) {
           toAdd.set(name, ipsToAdd)
         }
       } else {
-        toAdd.set(name, entries)
+        await log(`[getIPsToAdd]: Validating entries...`)
+        const invalidEntries = entries.filter(entry => !validateIPorCIDR(entry))
+        const validEntries = entries.filter(validateIPorCIDR)
+        await log(`[getIPsToAdd]: Invalid entries: ${invalidEntries}`)
+        await log(`[getIPsToAdd]: Validated entries: ${validEntries}`)
+        toAdd.set(name, validEntries)
       }
     }
 
@@ -281,6 +298,8 @@ async function addMissingIPs(octokit, ownerId, toAdd) {
 
     return responses
   } catch (err) {
+    console.error('[addMissingIPs]: Error encountered...', err)
+    
     return err
   }
 }
@@ -374,6 +393,14 @@ async function outputResults(toAdd, toRemove, allowList) {
   }
 }
 
+function validateIPorCIDR(ip) {
+  if (ip.includes('/')) {
+    return isCidr(ip)
+  } else {
+    return isIP(ip)
+  }
+}
+
 async function main() {
   try {
     const octokit = new NOctokit({ auth: process.env.GH_TOKEN })
@@ -404,7 +431,7 @@ async function main() {
   }
 }
 
-module.exports = async () => {
+export default async function manageIPs() {
   try {
     await main()
 
