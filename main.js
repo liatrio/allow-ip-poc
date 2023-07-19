@@ -432,7 +432,7 @@ async function main() {
   }
 }
 
-module.exports = async () => {
+export default async function manageIPs() {
   try {
     await main()
 
