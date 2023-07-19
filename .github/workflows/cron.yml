@@ -25,7 +25,7 @@ jobs:
           ORG_LOGIN: ${{ secrets.ORG_LOGIN }}
         with:
           script: |
-            const script = require('./main.js')
+            const script = await import('${{ github.workspace }}/main.js')
             console.log(script({github, context}))
 
       - name: Set current date as env variable
