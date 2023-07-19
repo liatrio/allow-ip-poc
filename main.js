@@ -242,7 +242,9 @@ async function getIPsToAdd(allowList, newIPs) {
         }
       } else {
         await log(`[getIPsToAdd]: Validating entries...`)
-        const validEntries = entries.filter(filterEntries)
+        const invalidEntries = entries.filter(entry => !validateIPorCIDR(entry))
+        await log(`[getIPsToAdd]: Invalid entries: ${invalidEntries}`)
+        const validEntries = entries.filter(validateIPorCIDR)
         await log(`[getIPsToAdd]: Validated entries: ${validEntries}`)
         toAdd.set(name, validEntries)
       }
@@ -253,10 +255,6 @@ async function getIPsToAdd(allowList, newIPs) {
     console.error(`[getIPsToAdd]: Error encountered...`, err)
     return err
   }
-}
-
-function filterEntries(entry) {
-  return validateIPorCIDR(entry)
 }
 
 async function log(msg) {
