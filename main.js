@@ -228,7 +228,6 @@ async function getIPsToAdd(allowList, newIPs) {
           if (!IPlist.includes(ip)) {
             const valid = validateIPorCIDR(ip)
             if (valid) {
-              console.log(valid)
               await log(`[getIPsToAdd]: ${ip} is valid. Adding...`)
               ipsToAdd.push(ip)
             } else {
