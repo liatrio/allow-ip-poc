@@ -20,8 +20,8 @@ In our POC, this is handled by an environment variable called `ORG_LOGIN`. You c
     # ORG_LOGIN: "ORG_NAME_HERE"
   with:
     script: |
-      const script = require('./main.js')
-      console.log(script({github, context}))
+      const { default: manageIPs } = await import('${{ github.workspace }}/main.js')
+      await manageIPs()
 ```
 
 ### GitHub Token
