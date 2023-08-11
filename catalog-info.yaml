@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: allow-ip-poc
+  annotations:
+    github.com/project-slug: liatrio/allow-ip-poc
+spec:
+  type: other
+  lifecycle: unknown
+  owner: github-practice
